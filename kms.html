@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laboratório: AWS Secrets Manager & KMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chosen Palette: Warm Neutrals & Tech Accents -->
+    <!-- Application Structure Plan: A single-page, linear, step-by-step tutorial structure was chosen to guide the user through a complex process logically. It starts with foundational concepts, moves to an interactive simulation of the creation/retrieval flow, and ends with a summary of benefits. This is more effective than a dashboard for a learning objective, as it controls the flow of information and builds knowledge progressively. Key interactions include simulating actions via button clicks and visualizing the multi-step decryption process with a timed animation to clarify the roles of KMS and Secrets Manager. -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: Relationship between App, Secrets Manager, KMS. Goal: Organize. Viz/Method: HTML/CSS diagram. Interaction: Static visual aid. Justification: Provides a high-level, static overview before the detailed simulation.
+        - Report Info: The process of storing a secret. Goal: Change/Demonstrate. Viz/Method: Multi-step interactive wizard with buttons and mock inputs. Interaction: User clicks to advance state. Justification: Breaks down a complex workflow into manageable, understandable steps.
+        - Report Info: The process of retrieving and decrypting a secret. Goal: Demonstrate process flow. Viz/Method: Animated HTML/CSS diagram. Interaction: A single click triggers a choreographed animation sequence. Justification: This is the most complex part of the concept; a dynamic visualization is crucial for showing how the services interact in real-time, which is far superior to static text or diagrams.
+        - Library/Method: Vanilla JS for all logic and animations. No chart libraries needed.
+        -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        @import url('https://rsms.me/inter/inter.css');
+        .step-inactive {
+            opacity: 0.4;
+            filter: grayscale(80%);
+            pointer-events: none;
+        }
+        .step-active {
+            opacity: 1;
+            filter: grayscale(0%);
+        }
+        .flow-element {
+            transition: all 0.5s ease-in-out;
+        }
+        .data-packet {
+            position: absolute;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: white;
+            opacity: 0;
+            transition: all 0.8s ease-in-out;
+            z-index: 10;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+    <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-20 border-b border-slate-200">
+        <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex-shrink-0">
+                    <h1 class="text-xl font-bold text-slate-900">Laboratório AWS</h1>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <a href="#intro" class="text-slate-600 hover:bg-slate-100 hover:text-slate-900 px-3 py-2 rounded-md text-sm font-medium">Introdução</a>
+                        <a href="#lab" class="text-slate-600 hover:bg-slate-100 hover:text-slate-900 px-3 py-2 rounded-md text-sm font-medium">Simulação</a>
+                        <a href="#benefits" class="text-slate-600 hover:bg-slate-100 hover:text-slate-900 px-3 py-2 rounded-md text-sm font-medium">Benefícios</a>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        
+        <section id="intro" class="mb-24">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-extrabold text-slate-900 sm:text-4xl">
+                    Protegendo Segredos na Nuvem
+                </h2>
+                <p class="mt-4 text-lg text-slate-600">Um guia interativo sobre como o AWS Secrets Manager e o KMS trabalham juntos.</p>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-8 items-center">
+                <div class="p-8 bg-white rounded-xl shadow-sm border border-slate-200">
+                    <h3 class="text-2xl font-bold text-blue-600 mb-3">AWS Secrets Manager</h3>
+                    <p class="text-slate-600">É um serviço para gerenciar, rotacionar e recuperar segredos de forma segura, como senhas de banco de dados, chaves de API e outros dados sensíveis. Ele elimina a necessidade de codificar informações sensíveis diretamente no código-fonte da sua aplicação.</p>
+                </div>
+                <div class="p-8 bg-white rounded-xl shadow-sm border border-slate-200">
+                    <h3 class="text-2xl font-bold text-orange-500 mb-3">AWS KMS (Key Management Service)</h3>
+                    <p class="text-slate-600">É um serviço gerenciado que facilita a criação e o controle das chaves de criptografia usadas para proteger seus dados. O KMS se integra a outros serviços da AWS para criptografar os dados que você armazena nesses serviços, usando chaves que você controla.</p>
+                </div>
+            </div>
+            <div class="mt-8 text-center p-6 bg-blue-50/50 border border-blue-200 rounded-xl">
+                <h4 class="font-bold text-lg text-slate-800">A Parceria Essencial</h4>
+                <p class="text-slate-600 mt-2">O Secrets Manager usa o KMS para a criptografia dos segredos. Quando você armazena um segredo, o Secrets Manager o criptografa usando uma chave de dados, e essa chave de dados é, por sua vez, criptografada por uma chave mestra (CMK) gerenciada no KMS. Este laboratório irá demonstrar esse fluxo em detalhes.</p>
+            </div>
+        </section>
+
+        <section id="lab" class="mb-24">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-extrabold text-slate-900 sm:text-4xl">
+                    Simulação Interativa do Processo
+                </h2>
+                <p class="mt-4 text-lg text-slate-600">Siga os passos para criar, armazenar e recuperar um segredo de forma segura.</p>
+            </div>
+
+            <div class="lg:grid lg:grid-cols-2 lg:gap-8 items-start">
+                
+                <div class="sticky top-24">
+                    <h3 class="text-xl font-bold mb-4 text-center">Arquitetura da Solução</h3>
+                    <div id="diagram-container" class="relative bg-white p-6 rounded-xl shadow-sm border border-slate-200 min-h-[400px]">
+                        
+                        <div id="app" class="flow-element absolute top-1/2 -translate-y-1/2 left-4 w-28 h-28 bg-green-100 border-2 border-green-400 rounded-lg flex flex-col justify-center items-center text-center p-2">
+                           <span class="text-5xl">💻</span> <span class="font-bold text-sm text-green-800">Aplicação</span>
+                        </div>
+                        
+                        <div id="secrets-manager" class="flow-element absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 w-32 h-32 bg-blue-100 border-2 border-blue-400 rounded-lg flex flex-col justify-center items-center text-center p-2">
+                             <span class="text-5xl">🛡️</span> <span class="font-bold text-sm text-blue-800">Secrets Manager</span>
+                             <div id="stored-secret-visual" class="hidden absolute -bottom-8 bg-slate-200 text-xs p-1 rounded">🔒 Segredo Criptografado</div>
+                        </div>
+
+                        <div id="kms" class="flow-element absolute top-1/2 -translate-y-1/2 right-4 w-28 h-28 bg-orange-100 border-2 border-orange-400 rounded-lg flex flex-col justify-center items-center text-center p-2">
+                           <span class="text-5xl">🔑</span> <span class="font-bold text-sm text-orange-800">KMS</span>
+                           <div id="kms-key-visual" class="hidden absolute -bottom-8 bg-slate-200 text-xs p-1 rounded">✨ Chave Mestra</div>
+                        </div>
+                        
+                        <div id="packet-1" class="data-packet bg-red-500">Solicitação de Segredo</div>
+                        <div id="packet-2" class="data-packet bg-purple-500">Chave Criptografada</div>
+                        <div id="packet-3" class="data-packet bg-teal-500">Chave Decriptografada</div>
+                        <div id="packet-4" class="data-packet bg-green-500">Segredo em Plaintext</div>
+
+                    </div>
+                    <div class="mt-4 p-4 bg-slate-100 rounded-lg text-center">
+                        <p id="diagram-status" class="text-slate-700 font-medium">O diagrama irá refletir suas ações. Comece pelo Passo 1.</p>
+                    </div>
+                </div>
+
+                <div class="space-y-6 mt-12 lg:mt-0">
+                    
+                    <div id="step-1" class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 step-active">
+                        <h4 class="text-lg font-bold mb-3"><span class="bg-slate-800 text-white rounded-full w-8 h-8 inline-flex items-center justify-center mr-3">1</span>Criar uma Chave Mestra no KMS</h4>
+                        <p class="text-slate-600 mb-4">O primeiro passo é criar uma Chave Mestra do Cliente (CMK) no KMS. Esta chave será a raiz de confiança para criptografar seus segredos.</p>
+                        <button id="create-kms-key-btn" class="w-full bg-orange-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-orange-600 transition-colors">
+                            Simular Criação da Chave KMS
+                        </button>
+                    </div>
+
+                    <div id="step-2" class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 step-inactive">
+                        <h4 class="text-lg font-bold mb-3"><span class="bg-slate-800 text-white rounded-full w-8 h-8 inline-flex items-center justify-center mr-3">2</span>Armazenar um Segredo</h4>
+                        <p class="text-slate-600 mb-4">Agora, vamos armazenar uma senha de banco de dados no Secrets Manager e associá-la à chave KMS que acabamos de "criar".</p>
+                        <div class="flex space-x-2 mb-4">
+                            <input type="text" id="secret-input" value="P@ssw0rdSuperS3cret!" class="flex-grow p-2 border border-slate-300 rounded-lg" readonly>
+                        </div>
+                        <button id="store-secret-btn" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                            Armazenar Segredo
+                        </button>
+                    </div>
+
+                    <div id="step-3" class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 step-inactive">
+                        <h4 class="text-lg font-bold mb-3"><span class="bg-slate-800 text-white rounded-full w-8 h-8 inline-flex items-center justify-center mr-3">3</span>Recuperar o Segredo</h4>
+                        <p class="text-slate-600 mb-4">A aplicação precisa da senha para se conectar ao banco. Clique no botão para simular a aplicação solicitando o segredo ao Secrets Manager.</p>
+                        <p class="mb-4 text-center font-mono p-4 bg-slate-100 rounded-lg text-slate-700">
+                           Senha na aplicação: <span id="app-secret-display" class="font-bold text-red-500">AINDA NÃO RECUPERADA</span>
+                        </p>
+                        <button id="retrieve-secret-btn" class="w-full bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
+                            Recuperar Segredo da Aplicação
+                        </button>
+                    </div>
+
+                    <div id="step-4" class="hidden bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <h4 class="text-lg font-bold mb-3"><span class="bg-slate-800 text-white rounded-full w-8 h-8 inline-flex items-center justify-center mr-3">🎉</span>Simulação Concluída!</h4>
+                        <p class="text-slate-600 mb-4">Você completou o ciclo! O segredo foi criado, armazenado e recuperado de forma segura, sem que a aplicação precisasse conhecer as chaves de criptografia. A orquestração entre Secrets Manager e KMS garantiu a segurança em todo o processo.</p>
+                         <button id="reset-btn" class="w-full bg-slate-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-slate-600 transition-colors">
+                            Reiniciar Simulação
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="benefits" class="mb-12">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-extrabold text-slate-900 sm:text-4xl">
+                    Principais Benefícios
+                </h2>
+                <p class="mt-4 text-lg text-slate-600">Por que usar essa abordagem é uma boa prática de segurança.</p>
+            </div>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-lg mb-2">Gerenciamento Centralizado</h3>
+                    <p class="text-slate-600 text-sm">Todos os seus segredos são armazenados em um local central, facilitando a auditoria e o controle de acesso.</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-lg mb-2">Rotação Automática de Segredos</h3>
+                    <p class="text-slate-600 text-sm">O Secrets Manager pode rotacionar automaticamente as credenciais, melhorando sua postura de segurança sem esforço manual.</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-lg mb-2">Controle de Acesso Fino</h3>
+                    <p class="text-slate-600 text-sm">Use políticas do AWS IAM para controlar precisamente qual usuário ou aplicação pode acessar qual segredo.</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-lg mb-2">Criptografia Segura</h3>
+                    <p class="text-slate-600 text-sm">A integração com o KMS garante que seus segredos são criptografados em repouso com chaves que você gerencia.</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-lg mb-2">Auditoria e Monitoramento</h3>
+                    <p class="text-slate-600 text-sm">As chamadas de API para ambos os serviços são registradas no AWS CloudTrail, permitindo auditoria completa de quem acessou o quê e quando.</p>
+                </div>
+                 <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-lg mb-2">Evita "Hardcoding"</h3>
+                    <p class="text-slate-600 text-sm">Elimina a prática insegura de embutir senhas e chaves diretamente no código-fonte da aplicação.</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-slate-800 text-slate-300">
+        <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 text-center text-sm">
+            <p>Laboratório Interativo construído para fins educacionais.</p>
+        </div>
+    </footer>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const state = {
+            kmsKeyCreated: false,
+            secretStored: false,
+            secretRetrieved: false,
+        };
+
+        const step1 = document.getElementById('step-1');
+        const step2 = document.getElementById('step-2');
+        const step3 = document.getElementById('step-3');
+        const step4 = document.getElementById('step-4');
+
+        const createKmsKeyBtn = document.getElementById('create-kms-key-btn');
+        const storeSecretBtn = document.getElementById('store-secret-btn');
+        const retrieveSecretBtn = document.getElementById('retrieve-secret-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        
+        const diagramStatus = document.getElementById('diagram-status');
+        const kmsKeyVisual = document.getElementById('kms-key-visual');
+        const storedSecretVisual = document.getElementById('stored-secret-visual');
+        const appSecretDisplay = document.getElementById('app-secret-display');
+        const secretInput = document.getElementById('secret-input');
+
+        const appEl = document.getElementById('app');
+        const smEl = document.getElementById('secrets-manager');
+        const kmsEl = document.getElementById('kms');
+        
+        const packet1 = document.getElementById('packet-1');
+        const packet2 = document.getElementById('packet-2');
+        const packet3 = document.getElementById('packet-3');
+        const packet4 = document.getElementById('packet-4');
+
+        const activateStep = (step) => {
+            step.classList.remove('step-inactive');
+            step.classList.add('step-active');
+        };
+        
+        const deactivateStep = (step) => {
+            step.classList.add('step-inactive');
+            step.classList.remove('step-active');
+            step.querySelector('button')?.setAttribute('disabled', 'true');
+        };
+
+        const animatePacket = (packet, fromEl, toEl) => {
+            return new Promise(resolve => {
+                const container = document.getElementById('diagram-container');
+                const fromRect = fromEl.getBoundingClientRect();
+                const toRect = toEl.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+
+                const startX = fromRect.left - containerRect.left + fromRect.width / 2;
+                const startY = fromRect.top - containerRect.top + fromRect.height / 2;
+                const endX = toRect.left - containerRect.left + toRect.width / 2;
+                const endY = toRect.top - containerRect.top + toRect.height / 2;
+
+                packet.style.left = `${startX}px`;
+                packet.style.top = `${startY}px`;
+                packet.style.opacity = '1';
+                
+                setTimeout(() => {
+                    packet.style.transform = `translate(${endX - startX}px, ${endY - startY}px)`;
+                }, 100);
+
+                setTimeout(() => {
+                    packet.style.opacity = '0';
+                    packet.style.transform = 'translate(0, 0)';
+                    resolve();
+                }, 1000);
+            });
+        };
+
+        const resetSimulation = () => {
+            state.kmsKeyCreated = false;
+            state.secretStored = false;
+            state.secretRetrieved = false;
+
+            activateStep(step1);
+            deactivateStep(step2);
+            step2.classList.add('step-inactive');
+            step2.classList.remove('step-active');
+            deactivateStep(step3);
+            step3.classList.add('step-inactive');
+            step3.classList.remove('step-active');
+            
+            step4.classList.add('hidden');
+
+            createKmsKeyBtn.removeAttribute('disabled');
+            storeSecretBtn.setAttribute('disabled', 'true');
+            retrieveSecretBtn.setAttribute('disabled', 'true');
+
+            kmsKeyVisual.classList.add('hidden');
+            storedSecretVisual.classList.add('hidden');
+            
+            appSecretDisplay.textContent = 'AINDA NÃO RECUPERADA';
+            appSecretDisplay.classList.remove('text-green-600');
+            appSecretDisplay.classList.add('text-red-500');
+
+            diagramStatus.textContent = 'O diagrama irá refletir suas ações. Comece pelo Passo 1.';
+        };
+
+        createKmsKeyBtn.addEventListener('click', () => {
+            state.kmsKeyCreated = true;
+            kmsKeyVisual.classList.remove('hidden');
+            diagramStatus.textContent = 'Chave Mestra criada no KMS. Agora armazene seu segredo.';
+            deactivateStep(step1);
+            activateStep(step2);
+            storeSecretBtn.removeAttribute('disabled');
+        });
+
+        storeSecretBtn.addEventListener('click', () => {
+            if (!state.kmsKeyCreated) return;
+            state.secretStored = true;
+            storedSecretVisual.classList.remove('hidden');
+            diagramStatus.textContent = 'Segredo criptografado e armazenado. Agora recupere-o pela aplicação.';
+            deactivateStep(step2);
+            activateStep(step3);
+            retrieveSecretBtn.removeAttribute('disabled');
+        });
+
+        retrieveSecretBtn.addEventListener('click', async () => {
+            if (!state.secretStored) return;
+            deactivateStep(step3);
+            diagramStatus.textContent = '1. A aplicação está solicitando o segredo...';
+            
+            await animatePacket(packet1, appEl, smEl);
+            diagramStatus.textContent = '2. Secrets Manager envia a chave de dados criptografada para o KMS.';
+
+            await animatePacket(packet2, smEl, kmsEl);
+            diagramStatus.textContent = '3. KMS decriptografa a chave e a devolve ao Secrets Manager.';
+
+            await animatePacket(packet3, kmsEl, smEl);
+            diagramStatus.textContent = '4. Secrets Manager usa a chave para decriptografar o segredo.';
+            
+            setTimeout(async () => {
+                diagramStatus.textContent = '5. O segredo em texto plano é enviado para a aplicação.';
+                await animatePacket(packet4, smEl, appEl);
+                
+                appSecretDisplay.textContent = secretInput.value;
+                appSecretDisplay.classList.remove('text-red-500');
+                appSecretDisplay.classList.add('text-green-600');
+                diagramStatus.textContent = 'Sucesso! O segredo foi recuperado com segurança.';
+                step4.classList.remove('hidden');
+            }, 1200);
+        });
+        
+        resetBtn.addEventListener('click', resetSimulation);
+        
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+            });
+        });
+
+        resetSimulation();
+    });
+    </script>
+</body>
+</html>
